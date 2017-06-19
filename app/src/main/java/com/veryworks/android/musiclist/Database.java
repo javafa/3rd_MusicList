@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.provider.MediaStore;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -26,7 +27,14 @@ public class Database {
 
     }
     // 음원 데이터를 읽어오는 함수
-    public List<Music> read(Context context){
+    public static List<Music> read(Context context){
+
+        // 0. 먼저 Album Art 가 있는 테이블에서 전체 이미지를 조회해서 저장해 둔다
+        setAlbumArt(context);
+        // (음악ID, 앨범아트 이미지경로) = hashMap
+        // (     1, /sdcar/exteranl/0/medai..... image.jpg)
+        // (     2, /sdcar/exteranl/0/medai..... image3.jpg)
+
         // 1. 읽어올 데이터가 뭔지 알아야 됨?
         //    읽어올 데이터 = 음악파일
         // 2. 음악파일을 읽어오기 위한 도구 선정 -> 일반적인 프로그래밍에서 File I/O
@@ -58,8 +66,15 @@ public class Database {
         while(cursor != null && cursor.moveToNext()){
             Music music = new Music();
             // 코드완성 하세요
-//            music.id = // <- 커서에서 id 를 꺼내서 담는다.
-//            // ...
+            music.id = getValue(cursor,projection[0]);
+            music.title = getValue(cursor,projection[1]);
+            music.albumId = getValue(cursor,projection[2]);
+            music.artist = getValue(cursor,projection[3]);
+
+            // 음원 uri
+            music.musicUri = makeMusicUri(music.id);
+            // 앨범아트 가져오기
+            music.albumArt = albumMap.get(Integer.parseInt(music.id));
 
             datas.add(music);
         }
@@ -68,6 +83,41 @@ public class Database {
 
         return datas;
     }
+
+    private static String getValue(Cursor cursor, String name){
+        int index = cursor.getColumnIndex(name);
+        return cursor.getString(index);
+    }
+
+    private static Uri makeMusicUri(String musicId){
+        Uri contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+        return Uri.withAppendedPath(contentUri, musicId);
+    }
+
+    // 앨범아트 데이터만 따로 저장
+    private static HashMap<Integer, String> albumMap = new HashMap<>();
+
+    private static void setAlbumArt(Context context) {
+        String[] Album_cursorColumns = new String[]{
+                MediaStore.Audio.Albums.ALBUM_ART, //앨범아트
+                MediaStore.Audio.Albums._ID
+        };
+        Cursor Album_cursor = context.getContentResolver().query(
+                MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
+                Album_cursorColumns, null, null, null);
+        if (Album_cursor != null) { //커서가 널값이 아니면
+            if (Album_cursor.moveToFirst()) { //처음참조
+                int albumArt = Album_cursor.getColumnIndex(MediaStore.Audio.Albums.ALBUM_ART);
+                int albumId = Album_cursor.getColumnIndex(MediaStore.Audio.Albums._ID);
+                do {
+                    if (!albumMap.containsKey(Integer.parseInt(Album_cursor.getString(albumId)))) { //맵에 앨범아이디가 없으면
+                        albumMap.put(Integer.parseInt(Album_cursor.getString(albumId)), Album_cursor.getString(albumArt)); //집어넣는다
+                    }
+                } while (Album_cursor.moveToNext());
+            }
+        }
+        Album_cursor.close();
+    }
 }
 
 class Music {
@@ -75,4 +125,7 @@ class Music {
     String title;
     String albumId;
     String artist;
+
+    Uri musicUri;
+    String albumArt;
 }
